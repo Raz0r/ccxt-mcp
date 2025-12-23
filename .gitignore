@@ -8,7 +8,7 @@
 
 # 의존성 및 드
 /node_modules
-/dist
+# /dist  # Committed for git-based installs
 /coverage
 *.log
 *.tsbuildinfo
