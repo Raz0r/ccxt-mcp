@@ -24,6 +24,23 @@ import { registerOrderTools } from "./tools/order-tools.js"; // Restore .js
 import { registerAccountTools } from "./tools/account-tools.js"; // Restore .js
 import { registerAnalysisTools } from "./tools/analysis-tools.js"; // 거래 분석 도구
 
+/**
+ * Resolves environment variables in a string.
+ * Supports ${VAR_NAME} syntax.
+ * @param value The string potentially containing env var references
+ * @returns The string with env vars resolved
+ */
+function resolveEnvVars(value: string): string {
+  return value.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+    const envValue = process.env[varName];
+    if (envValue === undefined) {
+      console.error(`[WARN] Environment variable '${varName}' is not defined`);
+      return match; // Keep original if not found
+    }
+    return envValue;
+  });
+}
+
 // 설정 파일의 계정 구조 정의
 interface AccountConfig {
   name: string;
@@ -36,6 +53,7 @@ interface AccountConfig {
   walletAddress?: string; // For DEX exchanges
   subaccount?: string; // For exchanges with subaccount support
   defaultType?: "spot" | "margin" | "future" | "swap" | "option"; // Extended market types
+  isSandbox?: boolean; // Enable sandbox/testnet mode
   enableRateLimit?: boolean; // Rate limiter control
   timeout?: number; // Custom timeout
   verbose?: boolean; // Debug mode
@@ -99,8 +117,11 @@ export class CcxtMcpServer {
         return;
       }
       
-      const configContent = fs.readFileSync(this.configPath, "utf-8");
-      console.error(`[DEBUG] Config file size: ${configContent.length} bytes`);
+      const rawConfigContent = fs.readFileSync(this.configPath, "utf-8");
+      console.error(`[DEBUG] Config file size: ${rawConfigContent.length} bytes`);
+
+      // Resolve environment variables in the config content
+      const configContent = resolveEnvVars(rawConfigContent);
       
       let config;
       try {
@@ -188,6 +209,12 @@ export class CcxtMcpServer {
           const exchangeInstance = new ccxt[account.exchangeId](
             exchangeOptions,
           );
+
+          // Enable sandbox/testnet mode if configured
+          if (account.isSandbox) {
+            exchangeInstance.setSandboxMode(true);
+            console.error(`[INFO] Sandbox mode enabled for account '${account.name}'`);
+          }
 
           // 특정 마켓 타입이 지원되는지 검증
           if (account.defaultType) {
